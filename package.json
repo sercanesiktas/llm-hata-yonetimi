@@ -1,0 +1,39 @@
+{
+  "name": "llm-hata-yonetimi",
+  "version": "0.1.0",
+  "description": "Yapay zeka API hatalarını sınıflandırır: hız sınırı, kota, bakiye, yetki. Yeniden denenecek hatayı, işi durduracak hatadan ayırır.",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist/src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/test/*.test.js"
+  },
+  "keywords": [
+    "llm",
+    "api",
+    "retry",
+    "rate-limit",
+    "429",
+    "402",
+    "quota"
+  ],
+  "author": "Sercan Eşiktaş",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sercanesiktas/llm-hata-yonetimi.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
