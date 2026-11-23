@@ -85,6 +85,7 @@ try {
 | `azamiMs` | 30000 | Tek bir beklemenin üst sınırı. |
 | `uyku`, `rastgele` | gerçek | Test için bekleme ve rastgelelik fonksiyonları. |
 | `denemeOncesi` | yok | Her yeniden deneme öncesi çağrılır, günlük için. |
+| `signal` | yok | `AbortSignal`. İptal edilirse bekleme yarıda kesilir, sinyalin `reason` değeri atılır ve yeni deneme yapılmaz. `fetchIleDene` aynı sinyali `fetch`e de verir. |
 
 ## Sınırlar
 

@@ -170,3 +170,34 @@ test('fetch: sunucu kapalıysa ağ hatası olarak yeniden dener ve vazgeçer', a
     DenemeHakkiBittiHatasi,
   );
 });
+
+test('iptal: bekleme sırasında sinyal gelirse yarıda kesilir ve yeni deneme yapılmaz', async () => {
+  const { sayac, islem } = dizi({ status: 429, headers: { 'retry-after': '60' } });
+  const k = new AbortController();
+  const baslangic = Date.now();
+  const sonuc = yenidenDene(islem, { signal: k.signal });
+  setTimeout(() => k.abort(new Error('vazgeçildi')), 20);
+  await assert.rejects(sonuc, /vazgeçildi/);
+  assert.ok(Date.now() - baslangic < 2000, '60 saniyelik bekleme beklenmemeli');
+  assert.equal(sayac.cagri, 1);
+});
+
+test('iptal: sinyal baştan iptal edilmişse işlem hiç çağrılmaz', async () => {
+  const { sayac, islem } = dizi({ status: 200 });
+  const k = new AbortController();
+  k.abort();
+  await assert.rejects(yenidenDene(islem, { signal: k.signal }), { name: 'AbortError' });
+  assert.equal(sayac.cagri, 0);
+});
+
+test('iptal: işlem sırasında iptal edilirse ağ hatası sayılıp yeniden denenmez', async () => {
+  const k = new AbortController();
+  let cagri = 0;
+  const islem = async (): Promise<Yanit> => {
+    cagri++;
+    k.abort(new Error('iptal'));
+    throw new Error('fetch iptal edildi');
+  };
+  await assert.rejects(yenidenDene(islem, { signal: k.signal, uyku: async () => {} }), /iptal/);
+  assert.equal(cagri, 1);
+});

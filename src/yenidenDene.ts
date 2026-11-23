@@ -25,11 +25,25 @@ export interface DeneSecenekleri {
   uyku?: (ms: number) => Promise<void>;
   /** 0 ile 1 arası rastgele sayı, testlerde sabitlenebilir. Beklemeye yüzde 0-25 sapma ekler. */
   rastgele?: () => number;
+  /** İptal sinyali. İptal edilirse bekleme yarıda kesilir ve sinyalin `reason` değeri atılır, yeni deneme yapılmaz. */
+  signal?: AbortSignal;
   /** Her yeniden deneme öncesi çağrılır. */
   denemeOncesi?: (bilgi: { deneme: number; beklemeMs: number; siniflandirma: Siniflandirma }) => void;
 }
 
-const bekle = (ms: number): Promise<void> => new Promise((coz) => setTimeout(coz, ms));
+const bekle = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((coz, red) => {
+    if (signal?.aborted) return red(signal.reason);
+    const zamanlayici = setTimeout(() => {
+      signal?.removeEventListener('abort', iptal);
+      coz();
+    }, ms);
+    const iptal = () => {
+      clearTimeout(zamanlayici);
+      red(signal!.reason);
+    };
+    signal?.addEventListener('abort', iptal, { once: true });
+  });
 
 /**
  * `islem` bir yanıt döner (HTTP durumu dahil). Başarılıysa (2xx) yanıtı verir. Hata ise sınıflandırır:
@@ -41,14 +55,17 @@ export async function yenidenDene(islem: () => Promise<Yanit>, secenek: DeneSece
   const maks = secenek.maksDeneme ?? 4;
   const taban = secenek.tabanMs ?? 500;
   const azami = secenek.azamiMs ?? 30_000;
-  const uyku = secenek.uyku ?? bekle;
+  const signal = secenek.signal;
+  const uyku = secenek.uyku ?? ((ms: number) => bekle(ms, signal));
   const rastgele = secenek.rastgele ?? Math.random;
 
   for (let deneme = 1; ; deneme++) {
+    signal?.throwIfAborted();
     let yanit: Yanit;
     try {
       yanit = await islem();
-    } catch {
+    } catch (e) {
+      if (signal?.aborted) throw signal.reason ?? e; // iptal bir ağ hatası değildir, yeniden denenmez
       yanit = { status: 0 }; // bağlantı koptu, zaman aşımı
     }
 
@@ -64,13 +81,14 @@ export async function yenidenDene(islem: () => Promise<Yanit>, secenek: DeneSece
     const beklemeMs = Math.min(hedef, azami);
     secenek.denemeOncesi?.({ deneme, beklemeMs, siniflandirma: s });
     await uyku(beklemeMs);
+    signal?.throwIfAborted();
   }
 }
 
 /** fetch ile kullanmak için: Response'u Yanit biçimine çevirir. */
 export async function fetchIleDene(url: string, init: RequestInit = {}, secenek: DeneSecenekleri = {}): Promise<Yanit> {
   return yenidenDene(async () => {
-    const r = await fetch(url, init);
+    const r = await fetch(url, { ...init, signal: init.signal ?? secenek.signal });
     const headers: Record<string, string> = {};
     r.headers.forEach((v, k) => { headers[k] = v; });
     return { status: r.status, headers, govde: await r.text() };
