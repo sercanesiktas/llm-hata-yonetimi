@@ -87,12 +87,42 @@ try {
 | `denemeOncesi` | yok | Her yeniden deneme öncesi çağrılır, günlük için. |
 | `signal` | yok | `AbortSignal`. İptal edilirse bekleme yarıda kesilir, sinyalin `reason` değeri atılır ve yeni deneme yapılmaz. `fetchIleDene` aynı sinyali `fetch`e de verir. |
 
+## Devre kesici
+
+Servis tamamen çöktüğünde her istek tüm denemelerini harcar ve beklemeyi bekler. `DevreKesici` art arda belli sayıda hata alınca bir süre hiç istek atmaz ve hemen `DevreAcikHatasi` atar:
+
+```ts
+import { DevreKesici, DevreAcikHatasi, yenidenDene } from 'llm-hata-yonetimi';
+
+const kesici = new DevreKesici({ esik: 5, beklemeMs: 30_000 });
+
+try {
+  const yanit = await kesici.calistir(() => yenidenDene(istek, { maksDeneme: 3 }));
+} catch (e) {
+  if (e instanceof DevreAcikHatasi) {
+    // servis çöktü, bu işi sonraya bırak
+  }
+}
+```
+
+`yenidenDene`yi kesicinin içine koy: üç denemeli bir çağrı tek hata sayılır. Süre dolunca tek bir deneme geçer, başarılı olursa devre kapanır, başarısız olursa yeniden açılır. Yarı açıkken eşzamanlı diğer çağrılar reddedilir.
+
+| Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `esik` | 5 | Devreyi açan art arda hata sayısı. |
+| `beklemeMs` | 30000 | Yeni deneme izni verilene kadar geçecek süre. |
+| `sayilsin` | her hata | Hangi hataların sayılacağına karar verir. Örneğin istemci hatalarını saymamak için. |
+| `simdi` | `Date.now` | Test için saat. |
+| `durumDegisti` | yok | Durum değişince çağrılır, günlük için. |
+
+`kesici.durum` (`kapali`, `acik`, `yari-acik`) ve `kesici.sifirla()` de vardır.
+
 ## Sınırlar
 
 - Sınıflandırma durum koduna ve yanıt metnindeki İngilizce ifadelere dayanır. Sağlayıcı ifadesini değiştirirse bir hata yanlış sınıfa düşebilir. Belli olmayan 429 `hiz` sayılır ve yalnızca `maksDeneme` kadar denenir.
 - Kota ve bakiye ifadeleri tek bir servis grubundan gözlenmiştir (Pollinations, Gemini, Cloudflare). Başka sağlayıcıların yanıt metinleri doğrulanmadı. Gerekirse `siniflandir` çıktısını kendi kuralınla sarmala.
 - Cloudflare günlük hak örneği testlerde gerçek yanıt değil, aynı davranışı anlatan örnek bir metindir.
-- Kütüphane bir devre kesici ya da günlük hız sınırlayıcı içermez. Tekrarlayan hatanın günlük dosyasını doldurmasını önlemek sana kalır.
+- Kütüphane bir günlük hız sınırlayıcı içermez. Tekrarlayan hatanın günlük dosyasını doldurmasını önlemek sana kalır. Art arda hatada istek atmayı bırakmak için aşağıdaki `DevreKesici` var.
 - `Retry-After` süresine jitter eklenmez, yalnızca üstel geri çekilmeye eklenir.
 
 ## Test
